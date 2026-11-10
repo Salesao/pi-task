@@ -1,0 +1,81 @@
+import { ASK_LIMITS, askResultText, createAskComponent, normalizeAskParams } from '../src/ask.js';
+import { normalizeTaskResult } from '../src/result.js';
+
+// Pi's packages are @earendil-works/* since Pi 0.74 and @mariozechner/* before it. Pi maps them for extensions, dynamic
+// imports included: Pi 0.74+ maps both scopes, older Pi only the old one. So each package is imported by the new name and,
+// failing that, by the old one, and the extension loads in both. A static import would tie it to one of them.
+const PI_SCOPES = ['@earendil-works', '@mariozechner'];
+
+async function importPiPackage(name) {
+  let firstError;
+  for (const scope of PI_SCOPES) {
+    try { return await import(scope + '/' + name); }
+    catch (error) { firstError ??= error; }
+  }
+  throw firstError;
+}
+
+function askQuestionSchema(Type) {
+  const AskOption = Type.Object({ label: Type.String(), description: Type.Optional(Type.String()) });
+  return Type.Object({
+    question: Type.String({ description: 'The full question, about the matter itself' }),
+    header: Type.String({ description: 'Tab label, up to 12 characters, e.g. "3 Rollback"' }),
+    context: Type.Optional(Type.String({ description: 'The card (situation, proposal, cost) shown above the question, up to 600 characters' })),
+    options: Type.Array(AskOption, { description: '2-4 options; the free answer "Type something." is added automatically' }),
+  });
+}
+
+function toolResult(raw) {
+  const outcome = normalizeTaskResult(raw);
+  return { content: [{ type: 'text', text: askResultText(outcome) }], details: outcome, structuredContent: outcome };
+}
+
+export default async function register(pi) {
+  const [{ Type }, { defineTool }, { Editor, Key, matchesKey, visibleWidth, wrapTextWithAnsi }] = await Promise.all([
+    importPiPackage('pi-ai'), importPiPackage('pi-coding-agent'), importPiPackage('pi-tui'),
+  ]);
+  const kit = { Editor, Key, matchesKey, visibleWidth, wrapTextWithAnsi };
+  const activeWindows = new Set();
+  pi.on('session_shutdown', () => {
+    for (const controller of activeWindows) controller.abort();
+    activeWindows.clear();
+  });
+
+  pi.registerTool(defineTool({
+    name: 'pi_task',
+    label: 'Ask the user',
+    description: 'Ask 1–4 questions with selectable options, descriptions and a free-text answer. Each question can include context. Enter selects an answer, Submit sends multiple answers, and Esc cancels the window.',
+    promptSnippet: 'Ask the user questions in an interactive terminal window.',
+    parameters: Type.Object({ questions: Type.Array(askQuestionSchema(Type), { minItems: 1, maxItems: ASK_LIMITS.questions }) }),
+    exposure: 'model-only',
+    executionMode: 'sequential',
+    async execute(_toolCallId, params, signal, _onUpdate, ctx) {
+      const parsed = normalizeAskParams(params);
+      if (!parsed.ok) return toolResult({ status: 'invalid', error: parsed.error });
+      if (signal?.aborted) return toolResult({ status: 'aborted' });
+      const hasTerminalUi = ctx.mode === undefined ? ctx.hasUI === true : ctx.mode === 'tui';
+      if (!hasTerminalUi || typeof ctx.ui?.custom !== 'function') {
+        return toolResult({ status: 'no-ui', mode: ctx.mode ?? 'without UI' });
+      }
+      const controller = new AbortController();
+      const onAbort = () => controller.abort();
+      signal?.addEventListener('abort', onAbort, { once: true });
+      activeWindows.add(controller);
+      try {
+        const result = await ctx.ui.custom((tui, theme, _keybindings, done) => createAskComponent({
+          questions: parsed.questions, tui, theme, kit, signal: controller.signal, done,
+        }));
+        if (controller.signal.aborted) return toolResult({ status: 'aborted' });
+        if (result === undefined && ctx.mode === undefined) return toolResult({ status: 'no-ui', mode: 'without terminal UI' });
+        return toolResult(result);
+      } catch (error) {
+        if (controller.signal.aborted) return toolResult({ status: 'aborted' });
+        throw error;
+      } finally {
+        signal?.removeEventListener('abort', onAbort);
+        activeWindows.delete(controller);
+        controller.abort();
+      }
+    },
+  }));
+}

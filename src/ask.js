@@ -45,14 +45,14 @@ export function normalizeAskParams(params) {
 }
 
 /** The text the agent gets back from the tool. */
-export function askResultText({ answers = [], cancelled = false, reason, mode, error } = {}) {
-  if (reason === 'invalid') {
+export function askResultText({ answers = [], cancelled = false, reason, status = reason, mode, error } = {}) {
+  if (status === 'invalid') {
     return `Invalid questions: ${error}. Limits: 1-${ASK_LIMITS.questions} questions, a header of up to ${ASK_LIMITS.header} characters, `
       + `a context of up to ${ASK_LIMITS.context} characters, ${ASK_LIMITS.minOptions}-${ASK_LIMITS.options} options each; shorten the context or split the questions into several calls.`;
   }
-  if (reason === 'no-ui') return `No interactive terminal UI (mode ${mode}). Ask the same questions as numbered text instead.`;
-  if (reason === 'aborted') return 'The questions were interrupted before an answer.';
-  if (cancelled) return 'The user cancelled the questions (Esc); nothing was answered.';
+  if (status === 'no-ui') return `No interactive terminal UI (mode ${mode}). Ask the same questions as numbered text instead.`;
+  if (status === 'aborted') return 'The questions were interrupted before an answer.';
+  if (cancelled || status === 'cancelled') return 'The user cancelled the questions (Esc); nothing was answered.';
   return answers.map((answer) => `${answer.header}: ${answer.kind === 'text' ? 'wrote' : 'selected'} "${answer.label}"`).join('\n');
 }
 
