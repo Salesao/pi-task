@@ -1,0 +1,9 @@
+{
+  "name": "pi-task",
+  "version": "0.1.0",
+  "type": "module",
+  "description": "Interactive question windows for Pi extensions",
+  "license": "MIT",
+  "engines": { "node": ">=18" },
+  "scripts": { "test": "node --test test/*.test.mjs" }
+}

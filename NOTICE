@@ -1,0 +1,4 @@
+The question window is adapted from Pi's MIT-licensed questionnaire example
+(https://github.com/earendil-works/pi/blob/main/packages/coding-agent/examples/extensions/questionnaire.ts)
+and the MIT-licensed orca-pod question tool (https://github.com/Salesao/orca-pod).
+See LICENSE for the applicable MIT license notices.
