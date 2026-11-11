@@ -1,6 +1,6 @@
 {
   "name": "pi-task",
-  "version": "0.1.0",
+  "version": "1.0.0",
   "type": "module",
   "description": "Interactive question windows for Pi extensions",
   "license": "MIT",
@@ -27,6 +27,7 @@
     "README*.md"
   ],
   "pi": {
+    "image": "https://github.com/Salesao/pi-task/raw/refs/heads/main/docs/pi-task-window.png",
     "extensions": [
       "./extensions/index.js"
     ]
