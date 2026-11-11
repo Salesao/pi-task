@@ -21,5 +21,8 @@
     "extensions": [
       "./extensions/index.js"
     ]
-  }
+  },
+  "keywords": [
+    "pi-package"
+  ]
 }
