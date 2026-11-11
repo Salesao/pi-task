@@ -10,6 +10,8 @@ Call `pi_task` with `questions`, an array of 1–4 objects. Each object has a `q
 {"questions":[{"header":"Layout","question":"Which layout should we use?","options":[{"label":"Grid","description":"Compare items side by side."},{"label":"List","description":"Read item details in order."}]}]}
 ```
 
+![The pi_task window: two question tabs, one line of context, and three options with descriptions.](https://github.com/Salesao/pi-task/raw/refs/heads/main/docs/pi-task-window.png)
+
 Use the arrow keys and Enter to select an option. Select **Type something.** to enter your own answer. A single answer submits immediately. For multiple questions, use the tabs and choose **Submit** when all are answered. Esc leaves the editor first and cancels the window from the question view.
 
 Set `multiSelect: true` on a question whose options are not mutually exclusive, as in Claude Code's `AskUserQuestion`. The options become checkboxes: Space or Enter toggles the highlighted one, and **Type something.** adds a typed answer next to the checked options (Enter edits it, Space clears it). Enter on the **Submit** row (**Next** when there are several questions) confirms the question; at least one option or a typed answer is required. In a tabbed window the Submit tab shows exactly what is checked.
