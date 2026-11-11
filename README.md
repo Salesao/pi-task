@@ -2,7 +2,7 @@
 
 `pi-task` is a standalone [Pi](https://pi.dev/) package. It registers the `pi_task` tool for asking a person questions in Pi's terminal UI.
 
-Install from npm with `pi install npm:pi-task`, then restart Pi or reload extensions. To try it for one session without changing settings, use `pi -e npm:pi-task`. To work from a checkout instead, use `pi install /absolute/path/to/pi-task` or `pi -e /absolute/path/to/pi-task/extensions/index.js`. For an isolated installation, set `PI_CODING_AGENT_DIR` to a fresh directory on every command.
+Install from npm with `pi install npm:pi-task`, then restart Pi or reload extensions. To work from a checkout instead, run `pi install /absolute/path/to/pi-task`; to load one extension file for a single session without changing settings, use `pi -e /absolute/path/to/extensions/index.js`. For an isolated installation, set `PI_CODING_AGENT_DIR` to a fresh directory on every command.
 
 Call `pi_task` with `questions`, an array of 1–4 objects. Each object has a `question`, a `header` of at most 12 characters, an optional `context` of at most 600 characters, and 2–4 `options`. Each option has a unique `label` and an optional `description`.
 
