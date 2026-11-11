@@ -1,19 +1,10 @@
 import { ASK_LIMITS, askResultText, createAskComponent, normalizeAskParams } from '../src/ask.js';
 import { normalizeTaskResult } from '../src/result.js';
 
-// Pi's packages are @earendil-works/* since Pi 0.74 and @mariozechner/* before it. Pi maps them for extensions, dynamic
-// imports included: Pi 0.74+ maps both scopes, older Pi only the old one. So each package is imported by the new name and,
-// failing that, by the old one, and the extension loads in both. A static import would tie it to one of them.
-const PI_SCOPES = ['@earendil-works', '@mariozechner'];
-
-async function importPiPackage(name) {
-  let firstError;
-  for (const scope of PI_SCOPES) {
-    try { return await import(scope + '/' + name); }
-    catch (error) { firstError ??= error; }
-  }
-  throw firstError;
-}
+// Both Pi loaders resolve the legacy namespace to their own SDK packages.
+import { Type } from '@mariozechner/pi-ai';
+import { defineTool } from '@mariozechner/pi-coding-agent';
+import { Editor, Key, matchesKey, visibleWidth, wrapTextWithAnsi } from '@mariozechner/pi-tui';
 
 function askQuestionSchema(Type) {
   const AskOption = Type.Object({ label: Type.String(), description: Type.Optional(Type.String()) });
@@ -31,9 +22,6 @@ function toolResult(raw) {
 }
 
 export default async function register(pi) {
-  const [{ Type }, { defineTool }, { Editor, Key, matchesKey, visibleWidth, wrapTextWithAnsi }] = await Promise.all([
-    importPiPackage('pi-ai'), importPiPackage('pi-coding-agent'), importPiPackage('pi-tui'),
-  ]);
   const kit = { Editor, Key, matchesKey, visibleWidth, wrapTextWithAnsi };
   const activeWindows = new Set();
   pi.on('session_shutdown', () => {

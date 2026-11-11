@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { getEventListeners } from 'node:events';
-import { cpSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { cpSync, mkdirSync, mkdtempSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { pathToFileURL } from 'node:url';
@@ -19,13 +19,18 @@ async function setup(t, scope = '@earendil-works') {
     'pi-coding-agent': 'export const defineTool = (tool) => tool;',
     'pi-tui': `export class Editor { setText() {} handleInput(text) { this.onSubmit(text); } }
       export const Key = {enter:'enter', escape:'esc', tab:'tab', down:'down', shift:(key) => 'shift+' + key};
-      export const matchesKey = (data, key) => data === key;`,
+      export const matchesKey = (data, key) => data === key;
+      export const visibleWidth = (text) => text.length;
+      export const wrapTextWithAnsi = (text) => [text];`,
   };
   for (const [name, source] of Object.entries(packages)) {
     const dir = join(root, 'node_modules', scope, name);
     mkdirSync(dir, { recursive: true });
     writeFileSync(join(dir, 'package.json'), '{"type":"module","exports":"./index.js"}');
     writeFileSync(join(dir, 'index.js'), source);
+  }
+  if (scope === '@earendil-works') {
+    symlinkSync(scope, join(root, 'node_modules', '@mariozechner'), 'dir');
   }
   const handlers = {};
   const tools = [];
