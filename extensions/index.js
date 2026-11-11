@@ -13,7 +13,7 @@ function askQuestionSchema(Type) {
     header: Type.String({ description: 'Tab label, up to 12 characters, e.g. "3 Rollback"' }),
     context: Type.Optional(Type.String({ description: 'The card (situation, proposal, cost) shown above the question, up to 600 characters' })),
     options: Type.Array(AskOption, { description: '2-4 options; the free answer "Type something." is added automatically' }),
-    multiSelect: Type.Optional(Type.Boolean({ description: 'Set to true to allow the user to select multiple options instead of just one. Use when the choices are not mutually exclusive. Default false' })),
+    multiSelect: Type.Optional(Type.Boolean({ description: 'Set to true to allow the user to select multiple options instead of just one. Use when the choices are not mutually exclusive, e.g. "Which platforms?" (true), not "Which approach?" (false). Default false' })),
   });
 }
 
@@ -33,7 +33,7 @@ export default async function register(pi) {
   pi.registerTool(defineTool({
     name: 'pi_task',
     label: 'Ask the user',
-    description: 'Ask 1–4 questions with selectable options, descriptions and a free-text answer. Each question can include context. Enter selects an answer, Submit sends multiple answers, and Esc cancels the window. Set multiSelect: true on a question whose options are not mutually exclusive: the user checks any number of options (plus an optional typed answer) and the answer lists all of them.',
+    description: 'Ask 1–4 questions with selectable options, descriptions and a free-text answer. Each question can include context. Enter selects an answer, Submit sends multiple answers, and Esc cancels the window. Set multiSelect: true on a question whose options are not mutually exclusive: the user checks any number of options (plus an optional typed answer) and the answer lists all of them. Decide from the question itself: "Which platforms should it support?" or "Which checks should run?" are multiSelect: true; "Which approach should we take?" or "Which layout?" pick exactly one, so leave it false.',
     promptSnippet: 'Ask the user questions in an interactive terminal window.',
     parameters: Type.Object({ questions: Type.Array(askQuestionSchema(Type), { minItems: 1, maxItems: ASK_LIMITS.questions }) }),
     exposure: 'model-only',
