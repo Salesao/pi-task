@@ -4,6 +4,15 @@
   "type": "module",
   "description": "Interactive question windows for Pi extensions",
   "license": "MIT",
+  "author": "Salesao",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Salesao/pi-task.git"
+  },
+  "homepage": "https://github.com/Salesao/pi-task#readme",
+  "bugs": {
+    "url": "https://github.com/Salesao/pi-task/issues"
+  },
   "engines": {
     "node": ">=18"
   },
@@ -23,6 +32,11 @@
     ]
   },
   "keywords": [
-    "pi-package"
+    "pi-package",
+    "pi",
+    "pi-coding-agent",
+    "extension",
+    "question",
+    "questionnaire"
   ]
 }
