@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import { askResultText, createAskComponent, normalizeAskParams } from "../src/ask.js";
+import { normalizeTaskResult } from "../src/result.js";
 
 // src/ask.js is the pi_task question window without Pi imports: index.js passes in
 // the pi-tui kit. Here a fake kit stands in for it, so the keys, answers and abort handling run under node:test.
@@ -11,6 +12,7 @@ class FakeEditor {
   getText() { return this.text; }
   handleInput(data) {
     if (data === "enter") this.onSubmit?.(this.text);
+    else if (data === "clear") this.text = "";
     else this.text += data;
   }
   render() { return [`| ${this.text}`]; }
@@ -19,7 +21,7 @@ class FakeEditor {
 
 const kit = {
   Editor: FakeEditor,
-  Key: { enter: "enter", escape: "escape", tab: "tab", up: "up", down: "down", left: "left", right: "right", shift: (key) => `shift+${key}` },
+  Key: { enter: "enter", escape: "escape", tab: "tab", space: "space", up: "up", down: "down", left: "left", right: "right", shift: (key) => `shift+${key}` },
   matchesKey: (data, key) => data === key,
   visibleWidth: (text) => text.length,
   // Cuts at the width, so the lines depend on it (a cache that ignores the width shows stale lines).
@@ -72,7 +74,7 @@ test("normalizeAskParams: 1-4 questions, 2-4 options, a header of up to 12 chara
   }
   const ok = normalizeAskParams({ questions: [question({ header: " 3 Rollback ", options: [{ label: " Keep " }, option(2)] })] });
   assert.equal(ok.ok, true);
-  assert.deepEqual(ok.questions, [{ question: "Q?", header: "3 Rollback", context: "", options: [{ label: "Keep", description: "" }, option(2)] }]);
+  assert.deepEqual(ok.questions, [{ question: "Q?", header: "3 Rollback", context: "", multiSelect: false, options: [{ label: "Keep", description: "" }, option(2)] }]);
 });
 
 test("one question: the first answer submits it", () => {
@@ -218,4 +220,137 @@ test("accepts exact question, option, header and context limits", () => {
   const largest = question({ header: "h".repeat(12), context: "c".repeat(600), options: [1, 2, 3, 4].map(option) });
   assert.equal(normalizeAskParams({ questions: [largest] }).ok, true);
   assert.equal(normalizeAskParams({ questions: Array(4).fill(largest) }).ok, true);
+});
+
+// Revision 3: multiSelect, as in Claude Code's AskUserQuestion. Rows of a two-option question:
+// 0 and 1 are the options, 2 is "Type something.", 3 is the Submit row (Next when there are several questions).
+const TAGS = {
+  question: "Which platforms should it support?",
+  header: "Platforms",
+  multiSelect: true,
+  options: [
+    { label: "macOS", description: "Apple silicon and Intel" },
+    { label: "Linux", description: "glibc and musl" },
+  ],
+};
+
+test("normalizeAskParams: multiSelect is false when absent, true when set, and must be a boolean", () => {
+  assert.equal(normalizeAskParams({ questions: [question()] }).questions[0].multiSelect, false);
+  assert.equal(normalizeAskParams({ questions: [question({ multiSelect: true })] }).questions[0].multiSelect, true);
+  const bad = normalizeAskParams({ questions: [question(), question({ multiSelect: "true" })] });
+  assert.equal(bad.ok, false);
+  assert.match(bad.error, /question 2: multiSelect must be true or false/);
+});
+
+test("multiSelect: Space and Enter toggle checkboxes, Enter on Submit sends every checked option in option order", () => {
+  const { calls, press } = open([TAGS]);
+  press("down", "space"); // Linux
+  press("up", "enter"); // macOS, toggled by Enter
+  assert.deepEqual(calls, [], "toggling never submits");
+  press("down", "down", "down", "enter");
+  assert.deepEqual(calls, [{
+    answers: [{ header: "Platforms", kind: "multi", label: "macOS, Linux", selections: [{ kind: "option", label: "macOS" }, { kind: "option", label: "Linux" }] }],
+    cancelled: false,
+  }]);
+});
+
+test("multiSelect: a second press unchecks, and Submit with nothing checked warns and does not submit", () => {
+  const { component, calls, press } = open([TAGS]);
+  press("space", "space", "down", "down", "down", "enter");
+  assert.deepEqual(calls, []);
+  assert.ok(component.render(80).some((line) => line.includes("Select at least one option")));
+  press("up", "space"); // any key clears the warning
+  assert.ok(!component.render(80).some((line) => line.includes("Select at least one option")));
+  press("space"); // Space on the Submit row does nothing
+  assert.deepEqual(calls, []);
+});
+
+test("multiSelect: Type something. adds a typed answer next to the checked options; Enter edits it, Space or an empty save clears it", () => {
+  const { component, calls, press } = open([TAGS]);
+  press("down", "down", "enter", "Windows", "enter"); // opens the editor, types, saves
+  const text = component.render(80).join("\n");
+  assert.ok(text.includes("[✓] Type something.") && text.includes("Windows"), text);
+  press("enter", " too", "enter"); // reopens with "Windows" in the editor
+  assert.ok(component.render(80).join("\n").includes("Windows too"));
+  press("space"); // clears the typed answer
+  assert.ok(component.render(80).join("\n").includes("[ ] Type something."));
+  press("enter", "later", "enter", "enter", "clear", "enter"); // type again, reopen, erase it and save the empty text
+  assert.ok(component.render(80).join("\n").includes("[ ] Type something."));
+  press("enter", "Windows", "enter", "up", "up", "space", "down", "down", "down", "enter");
+  assert.deepEqual(calls, [{
+    answers: [{ header: "Platforms", kind: "multi", label: "macOS, Windows", selections: [{ kind: "option", label: "macOS" }, { kind: "text", label: "Windows" }] }],
+    cancelled: false,
+  }]);
+});
+
+test("multiSelect: Esc in the editor keeps the previous typed answer", () => {
+  const { component, press } = open([TAGS]);
+  press("down", "down", "enter", "Windows", "enter", "enter", " draft", "escape");
+  assert.ok(component.render(80).join("\n").includes("[✓] Type something."));
+  assert.ok(!component.render(80).join("\n").includes("draft"));
+});
+
+test("multiSelect in a tabbed window: Next moves on, Submit waits for every question, answers keep question order", () => {
+  const { component, calls, press } = open([TAGS, MAP]);
+  press("space", "down", "down", "down", "enter"); // checks macOS, Next moves to 1 Map
+  press("enter"); // answers 1 Map, moves to Submit
+  const review = component.render(80).join("\n");
+  assert.ok(review.includes("Platforms: macOS") && review.includes("1 Map: Keep"), review);
+  press("shift+tab", "shift+tab", "down", "space"); // back to Platforms, adds Linux after leaving it
+  press("tab", "tab", "enter");
+  assert.deepEqual(calls, [{
+    answers: [
+      { header: "Platforms", kind: "multi", label: "macOS, Linux", selections: [{ kind: "option", label: "macOS" }, { kind: "option", label: "Linux" }] },
+      { header: "1 Map", kind: "option", label: "Keep" },
+    ],
+    cancelled: false,
+  }]);
+});
+
+test("multiSelect in a tabbed window: an unchecked question stays unanswered and blocks Submit", () => {
+  const { component, calls, press } = open([TAGS, MAP]);
+  press("tab", "enter", "enter"); // answers 1 Map, then Submit with Platforms empty
+  assert.deepEqual(calls, []);
+  assert.ok(component.render(80).join("\n").includes("Unanswered: Platforms"));
+});
+
+test("multiSelect render: checkboxes, the typed answer, the Submit row and the toggle help line", () => {
+  const { component, press } = open([TAGS]);
+  const rule = "─".repeat(200);
+  assert.deepEqual(component.render(200), [
+    rule, " Which platforms should it support?", "",
+    "> 1. [ ] macOS", "     Apple silicon and Intel", "  2. [ ] Linux", "     glibc and musl", "  3. [ ] Type something.", "",
+    "  ✓ Submit", "", " ↑↓ move • Space/Enter toggle • Esc cancel", rule,
+  ]);
+  press("space");
+  assert.ok(component.render(200).includes("> 1. [✓] macOS"));
+  const tabbed = open([TAGS, MAP]).component.render(200);
+  assert.ok(tabbed.includes("  ✓ Next"));
+  assert.ok(tabbed.includes(" Tab/←→ navigate • ↑↓ move • Space/Enter toggle • Esc cancel"));
+});
+
+test("multiSelect: Esc cancels and discards the checked options", () => {
+  const { calls, press } = open([TAGS]);
+  press("space", "escape", "enter");
+  assert.deepEqual(calls, [{ answers: [], cancelled: true }]);
+});
+
+test("askResultText: a multi-select answer lists the selected options and the typed answer", () => {
+  const selections = [{ kind: "option", label: "macOS" }, { kind: "option", label: "Linux" }, { kind: "text", label: "Windows, maybe" }];
+  assert.equal(askResultText({ answers: [
+    { header: "Platforms", kind: "multi", label: "macOS, Linux, Windows, maybe", selections },
+    { header: "1 Map", kind: "option", label: "Keep" },
+  ] }), 'Platforms: selected "macOS", "Linux"; wrote "Windows, maybe"\n1 Map: selected "Keep"');
+  assert.equal(askResultText({ answers: [{ header: "P", kind: "multi", label: "macOS", selections: selections.slice(0, 1) }] }), 'P: selected "macOS"');
+});
+
+test("normalizeTaskResult: a multi answer keeps its selections; a malformed one is not submitted", () => {
+  const good = { header: "P", kind: "multi", label: "A, B", selections: [{ kind: "option", label: "A" }, { kind: "text", label: "B", extra: 1 }] };
+  assert.deepEqual(normalizeTaskResult({ answers: [good], cancelled: false }), {
+    status: "submitted",
+    answers: [{ header: "P", kind: "multi", label: "A, B", selections: [{ kind: "option", label: "A" }, { kind: "text", label: "B" }] }],
+  });
+  for (const selections of [undefined, [], [{ kind: "multi", label: "A" }], [{ kind: "option", label: " " }]]) {
+    assert.deepEqual(normalizeTaskResult({ answers: [{ ...good, selections }], cancelled: false }), { status: "aborted", answers: [] });
+  }
 });

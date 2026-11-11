@@ -18,7 +18,7 @@ async function setup(t, scope = '@earendil-works') {
     'pi-ai': 'export const Type = new Proxy({}, { get: (_, type) => (...args) => ({type, args}) });',
     'pi-coding-agent': 'export const defineTool = (tool) => tool;',
     'pi-tui': `export class Editor { setText() {} handleInput(text) { this.onSubmit(text); } }
-      export const Key = {enter:'enter', escape:'esc', tab:'tab', down:'down', shift:(key) => 'shift+' + key};
+      export const Key = {enter:'enter', escape:'esc', tab:'tab', space:'space', down:'down', shift:(key) => 'shift+' + key};
       export const matchesKey = (data, key) => data === key;
       export const visibleWidth = (text) => text.length;
       export const wrapTextWithAnsi = (text) => [text];`,
@@ -103,4 +103,20 @@ test('Esc, abort, shutdown and an unfinished window cannot submit answers', asyn
   }
   const ctx = { mode: 'tui', ui: { custom: () => undefined } };
   await expectResult(tool.execute('call', params, undefined, undefined, ctx), 'aborted');
+});
+
+test('multiSelect is declared in the schema and the checked options come back as one multi answer', async (t) => {
+  const { tool } = await setup(t);
+  const question = tool.parameters.args[0].questions.args[0].args[0];
+  assert.equal(question.multiSelect.type, 'Optional');
+  assert.equal(question.multiSelect.args[0].type, 'Boolean');
+  assert.match(tool.description, /multiSelect/);
+
+  const input = { questions: [{ ...params.questions[0], multiSelect: true }] };
+  const { component, result } = open(tool, { input });
+  for (const key of ['space', 'down', 'space', 'down', 'down', 'enter']) component.handleInput(key); // One, Two, then the Submit row
+  const selections = [{ kind: 'option', label: 'One' }, { kind: 'option', label: 'Two' }];
+  assert.match(await expectResult(result, 'submitted', [{ header: 'Choice', kind: 'multi', label: 'One, Two', selections }]), /Choice: selected "One", "Two"/);
+
+  await expectResult(open(tool, { input: { questions: [{ ...params.questions[0], multiSelect: 'yes' }] } }).result, 'invalid');
 });
